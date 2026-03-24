@@ -5,61 +5,88 @@ import plotly.express as px
 
 BASE_URL = "http://127.0.0.1:8000"
 
-st.set_page_config(page_title="AI Personal CA", layout="wide")
+st.set_page_config(layout="wide")
+st.title("💸 AI Personal CA")
 
-st.title("💸 AI Personal CA Dashboard")
+# -------- SESSION --------
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+
+# -------- AUTH --------
+st.sidebar.title("🔐 Auth")
+
+mode = st.sidebar.selectbox("Mode", ["Login", "Register"])
+
+username = st.sidebar.text_input("Username")
+password = st.sidebar.text_input("Password", type="password")
+
+if mode == "Register":
+    if st.sidebar.button("Register"):
+        res = requests.post(f"{BASE_URL}/register",
+                            json={"username": username, "password": password})
+        st.sidebar.success(res.json().get("message", res.json().get("error")))
+
+if mode == "Login":
+    if st.sidebar.button("Login"):
+        res = requests.post(f"{BASE_URL}/login",
+                            json={"username": username, "password": password})
+        data = res.json()
+
+        if "user_id" in data:
+            st.session_state.user_id = data["user_id"]
+            st.rerun()
+        else:
+            st.sidebar.error("Invalid login")
 
 # -------- USER --------
-user_id = st.sidebar.text_input("Enter User ID")
+user_id = st.session_state.user_id
 
-# -------- ADD TRANSACTION --------
-st.sidebar.subheader("➕ Add Transaction")
+if user_id:
+    st.sidebar.write(f"👤 {user_id}")
 
-date = st.sidebar.date_input("Date")
-amount = st.sidebar.number_input("Amount", min_value=0.0)
-
-category = st.sidebar.selectbox("Category", [
-    "Food", "Shopping", "Transport", "Bills", "Medical", "Travel", "Other"
-])
-
-merchant = st.sidebar.text_input("Merchant")
-
-if st.sidebar.button("Add Transaction"):
-    payload = {
-        "user_id": user_id,
-        "date": str(date),
-        "amount": amount,
-        "category": category,
-        "merchant": merchant
-    }
-
-    res = requests.post(f"{BASE_URL}/add_transaction", json=payload)
-
-    if res.status_code == 200:
-        st.success("Added ✅")
+    if st.sidebar.button("Logout"):
+        st.session_state.user_id = None
         st.rerun()
 
-# -------- DASHBOARD --------
-if user_id:
+    # -------- ADD --------
+    st.sidebar.subheader("Add Transaction")
 
-    # KPI
+    date = st.sidebar.date_input("Date")
+    amount = st.sidebar.number_input("Amount", 0.0)
+
+    category = st.sidebar.selectbox("Category",
+        ["Food","Shopping","Transport","Bills","Medical","Travel","Other"])
+
+    merchant = st.sidebar.text_input("Merchant")
+
+    if st.sidebar.button("Add"):
+        requests.post(f"{BASE_URL}/add_transaction", json={
+            "user_id": user_id,
+            "date": str(date),
+            "amount": amount,
+            "category": category,
+            "merchant": merchant
+        })
+        st.rerun()
+
+    # -------- DASHBOARD --------
     summary = requests.get(f"{BASE_URL}/summary/{user_id}").json()
 
     col1, col2 = st.columns(2)
-    col1.metric("Total", f"₹{summary.get('total_spending',0)}")
-    col2.metric("Average", f"₹{summary.get('avg_spending',0)}")
+    col1.metric("Total", summary.get("total_spending",0))
+    col2.metric("Average", summary.get("avg_spending",0))
 
     # Category
     cat = requests.get(f"{BASE_URL}/category/{user_id}").json()
     if cat:
-        df = pd.DataFrame(list(cat.items()), columns=["Category", "Amount"])
-        st.plotly_chart(px.pie(df, names="Category", values="Amount"), width="stretch")
+        df = pd.DataFrame(cat.items(), columns=["Category","Amount"])
+        st.plotly_chart(px.pie(df, names="Category", values="Amount"))
 
     # Trend
     trend = requests.get(f"{BASE_URL}/trend/{user_id}").json()
     if trend:
-        df = pd.DataFrame(list(trend.items()), columns=["Month", "Amount"])
-        st.plotly_chart(px.line(df, x="Month", y="Amount"), width="stretch")
+        df = pd.DataFrame(trend.items(), columns=["Month","Amount"])
+        st.plotly_chart(px.line(df, x="Month", y="Amount"))
 
     # AI
     st.subheader("🤖 AI Insights")
@@ -69,12 +96,11 @@ if user_id:
 
     # ML
     st.subheader("🧠 ML Anomalies")
-    ml = requests.get(f"{BASE_URL}/ml-anomalies/{user_id}").json()
-
+    ml = requests.get(f"{BASE_URL}/ml/{user_id}").json()
     if ml["anomalies"]:
         st.dataframe(pd.DataFrame(ml["anomalies"]))
     else:
-        st.success("No anomalies detected")
+        st.success("No anomalies")
 
 else:
-    st.info("Enter User ID to start")
+    st.info("Login to continue")

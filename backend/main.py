@@ -4,7 +4,7 @@ from backend.database import get_connection
 
 app = FastAPI()
 
-# ---------------- INIT DB ----------------
+# -------- DB INIT --------
 conn = get_connection()
 cursor = conn.cursor()
 
@@ -19,56 +19,88 @@ CREATE TABLE IF NOT EXISTS transactions (
 )
 """)
 
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    password TEXT
+)
+""")
+
 conn.commit()
 conn.close()
 
-# ---------------- ROUTES ----------------
+# -------- AUTH --------
+@app.post("/register")
+def register(data: dict = Body(...)):
+    conn = get_connection()
+    cursor = conn.cursor()
 
-@app.get("/")
-def home():
-    return {"message": "AI Personal CA Running 🚀"}
+    try:
+        cursor.execute(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            (data["username"], data["password"])
+        )
+        conn.commit()
+        return {"message": "User created"}
+    except:
+        return {"error": "User exists"}
+    finally:
+        conn.close()
 
 
+@app.post("/login")
+def login(data: dict = Body(...)):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT * FROM users WHERE username=? AND password=?",
+        (data["username"], data["password"])
+    )
+
+    user = cursor.fetchone()
+    conn.close()
+
+    if user:
+        return {"user_id": data["username"]}
+    return {"error": "Invalid credentials"}
+
+
+# -------- APIs --------
 @app.get("/summary/{user_id}")
 def summary(user_id: str):
-    df = get_user_data(user_id)
-    return get_summary(df)
+    return get_summary(get_user_data(user_id))
 
 
 @app.get("/category/{user_id}")
 def category(user_id: str):
-    df = get_user_data(user_id)
-    return category_analysis(df)
+    return category_analysis(get_user_data(user_id))
 
 
 @app.get("/trend/{user_id}")
 def trend(user_id: str):
-    df = get_user_data(user_id)
-    return spending_trend(df)
+    return spending_trend(get_user_data(user_id))
 
 
 @app.get("/leaks/{user_id}")
 def leaks(user_id: str):
-    df = get_user_data(user_id)
-    return detect_leaks(df)
+    return detect_leaks(get_user_data(user_id))
 
 
 @app.get("/tax/{user_id}")
 def tax(user_id: str):
-    df = get_user_data(user_id)
-    return tax_insights(df)
+    return tax_insights(get_user_data(user_id))
 
 
 @app.get("/ai/{user_id}")
 def ai(user_id: str):
-    df = get_user_data(user_id)
-    return {"insights": advanced_ai_insights(df)}
+    return {"insights": advanced_ai_insights(get_user_data(user_id))}
 
 
-@app.get("/ml-anomalies/{user_id}")
-def ml_anomalies(user_id: str):
-    df = get_user_data(user_id)
-    return detect_anomalies_ml(df)
+@app.get("/ml/{user_id}")
+def ml(user_id: str):
+    return detect_anomalies_ml(get_user_data(user_id))
 
 
 @app.post("/add_transaction")
@@ -90,4 +122,4 @@ def add_transaction(data: dict = Body(...)):
     conn.commit()
     conn.close()
 
-    return {"message": "Transaction added"}
+    return {"message": "Added"}
