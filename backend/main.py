@@ -1,18 +1,10 @@
 from fastapi import FastAPI, Body
-from services import (
-    get_user_data,
-    get_summary,
-    category_analysis,
-    spending_trend,
-    detect_leaks,
-    tax_insights,
-    advanced_ai_insights
-)
-from database import get_connection
+from backend.services import *
+from backend.database import get_connection
 
 app = FastAPI()
 
-# ---------------- DATABASE INIT ----------------
+# ---------------- INIT DB ----------------
 conn = get_connection()
 cursor = conn.cursor()
 
@@ -34,10 +26,8 @@ conn.close()
 
 @app.get("/")
 def home():
-    return {"message": "AI Personal CA Backend Running 🚀"}
+    return {"message": "AI Personal CA Running 🚀"}
 
-
-# ---------------- USER BASED APIs ----------------
 
 @app.get("/summary/{user_id}")
 def summary(user_id: str):
@@ -75,7 +65,11 @@ def ai(user_id: str):
     return {"insights": advanced_ai_insights(df)}
 
 
-# ---------------- ADD TRANSACTION ----------------
+@app.get("/ml-anomalies/{user_id}")
+def ml_anomalies(user_id: str):
+    df = get_user_data(user_id)
+    return detect_anomalies_ml(df)
+
 
 @app.post("/add_transaction")
 def add_transaction(data: dict = Body(...)):
@@ -96,4 +90,4 @@ def add_transaction(data: dict = Body(...)):
     conn.commit()
     conn.close()
 
-    return {"message": "Transaction added successfully"}
+    return {"message": "Transaction added"}
