@@ -5,17 +5,36 @@ import plotly.express as px
 
 BASE_URL = "http://127.0.0.1:8000"
 
-st.set_page_config(layout="wide")
-st.title("💸 AI Personal CA")
+st.set_page_config(page_title="AI Personal CA", layout="wide")
+
+# -------- CUSTOM CSS --------
+st.markdown("""
+<style>
+.main {
+    background-color: #0E1117;
+}
+.block-container {
+    padding-top: 2rem;
+}
+.metric-card {
+    background-color: #1E1E2F;
+    padding: 15px;
+    border-radius: 12px;
+    text-align: center;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.title("💸 AI Personal CA Dashboard")
 
 # -------- SESSION --------
 if "user_id" not in st.session_state:
     st.session_state.user_id = None
 
 # -------- AUTH --------
-st.sidebar.title("🔐 Auth")
+st.sidebar.title("🔐 Authentication")
 
-mode = st.sidebar.selectbox("Mode", ["Login", "Register"])
+mode = st.sidebar.radio("Mode", ["Login", "Register"])
 
 username = st.sidebar.text_input("Username")
 password = st.sidebar.text_input("Password", type="password")
@@ -36,20 +55,21 @@ if mode == "Login":
             st.session_state.user_id = data["user_id"]
             st.rerun()
         else:
-            st.sidebar.error("Invalid login")
+            st.sidebar.error("Invalid credentials")
 
 # -------- USER --------
 user_id = st.session_state.user_id
 
 if user_id:
-    st.sidebar.write(f"👤 {user_id}")
+
+    st.sidebar.success(f"👤 {user_id}")
 
     if st.sidebar.button("Logout"):
         st.session_state.user_id = None
         st.rerun()
 
-    # -------- ADD --------
-    st.sidebar.subheader("Add Transaction")
+    # -------- ADD TRANSACTION --------
+    st.sidebar.subheader("➕ Add Transaction")
 
     date = st.sidebar.date_input("Date")
     amount = st.sidebar.number_input("Amount", 0.0)
@@ -69,38 +89,51 @@ if user_id:
         })
         st.rerun()
 
-    # -------- DASHBOARD --------
+    # -------- KPI --------
     summary = requests.get(f"{BASE_URL}/summary/{user_id}").json()
+    prediction = requests.get(f"{BASE_URL}/predict/{user_id}").json()
 
-    col1, col2 = st.columns(2)
-    col1.metric("Total", summary.get("total_spending",0))
-    col2.metric("Average", summary.get("avg_spending",0))
+    col1, col2, col3 = st.columns(3)
 
-    # Category
+    col1.metric("💰 Total Spending", f"₹{summary.get('total_spending',0)}")
+    col2.metric("📊 Avg Spending", f"₹{summary.get('avg_spending',0)}")
+    col3.metric("🔮 Next Month (Predicted)", f"₹{prediction.get('prediction',0)}")
+
+    st.markdown("---")
+
+    # -------- CHARTS --------
+    colA, colB = st.columns(2)
+
+    # Category Pie
     cat = requests.get(f"{BASE_URL}/category/{user_id}").json()
     if cat:
         df = pd.DataFrame(cat.items(), columns=["Category","Amount"])
-        st.plotly_chart(px.pie(df, names="Category", values="Amount"))
+        fig = px.pie(df, names="Category", values="Amount", hole=0.4)
+        colA.plotly_chart(fig, use_container_width=True)
 
     # Trend
     trend = requests.get(f"{BASE_URL}/trend/{user_id}").json()
     if trend:
         df = pd.DataFrame(trend.items(), columns=["Month","Amount"])
-        st.plotly_chart(px.line(df, x="Month", y="Amount"))
+        fig = px.line(df, x="Month", y="Amount", markers=True)
+        colB.plotly_chart(fig, use_container_width=True)
 
-    # AI
+    st.markdown("---")
+
+    # -------- AI --------
     st.subheader("🤖 AI Insights")
     ai = requests.get(f"{BASE_URL}/ai/{user_id}").json()
     for i in ai["insights"]:
         st.info(i)
 
-    # ML
-    st.subheader("🧠 ML Anomalies")
+    # -------- ML --------
+    st.subheader("🧠 ML Anomaly Detection")
     ml = requests.get(f"{BASE_URL}/ml/{user_id}").json()
+
     if ml["anomalies"]:
         st.dataframe(pd.DataFrame(ml["anomalies"]))
     else:
-        st.success("No anomalies")
+        st.success("No anomalies detected")
 
 else:
-    st.info("Login to continue")
+    st.warning("Please login to access your dashboard")

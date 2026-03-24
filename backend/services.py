@@ -1,17 +1,17 @@
 import pandas as pd
-from backend.database import get_connection
+import numpy as np
 from sklearn.ensemble import IsolationForest
+from sklearn.linear_model import LinearRegression
+from backend.database import get_connection
 
 # -------- FETCH USER DATA --------
 def get_user_data(user_id):
     conn = get_connection()
-
     df = pd.read_sql_query(
         "SELECT * FROM transactions WHERE user_id = ?",
         conn,
         params=(user_id,)
     )
-
     conn.close()
     return df
 
@@ -22,8 +22,8 @@ def get_summary(df):
         return {"total_spending": 0, "avg_spending": 0}
 
     return {
-        "total_spending": float(df["amount"].sum()),
-        "avg_spending": float(df["amount"].mean())
+        "total_spending": float(round(df["amount"].sum(), 2)),
+        "avg_spending": float(round(df["amount"].mean(), 2))
     }
 
 
@@ -31,7 +31,6 @@ def get_summary(df):
 def category_analysis(df):
     if df.empty:
         return {}
-
     return df.groupby("category")["amount"].sum().to_dict()
 
 
@@ -46,7 +45,7 @@ def spending_trend(df):
     return df.groupby("month")["amount"].sum().to_dict()
 
 
-# -------- LEAKS --------
+# -------- LEAK DETECTION --------
 def detect_leaks(df):
     if df.empty:
         return {"high_transactions": []}
@@ -66,7 +65,6 @@ def tax_insights(df):
         return {"tax_related_spending": 0, "count": 0}
 
     df["category"] = df["category"].str.lower()
-
     tax_df = df[df["category"].isin(["medical", "travel"])]
 
     return {
@@ -124,3 +122,25 @@ def detect_anomalies_ml(df):
         "anomalies": anomalies[["date", "merchant", "amount"]]
         .to_dict(orient="records")
     }
+
+
+# -------- EXPENSE PREDICTION --------
+def predict_expense(df):
+    if df.empty or len(df) < 5:
+        return {"prediction": 0}
+
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date")
+
+    df["day_index"] = (df["date"] - df["date"].min()).dt.days
+
+    X = df[["day_index"]].values
+    y = df["amount"].values
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    future_days = np.array([[df["day_index"].max() + i] for i in range(1, 31)])
+    preds = model.predict(future_days)
+
+    return {"prediction": float(round(preds.sum(), 2))}

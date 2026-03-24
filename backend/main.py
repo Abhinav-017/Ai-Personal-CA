@@ -4,7 +4,7 @@ from backend.database import get_connection
 
 app = FastAPI()
 
-# -------- DB INIT --------
+# -------- INIT DB --------
 conn = get_connection()
 cursor = conn.cursor()
 
@@ -67,7 +67,7 @@ def login(data: dict = Body(...)):
     return {"error": "Invalid credentials"}
 
 
-# -------- APIs --------
+# -------- USER APIs --------
 @app.get("/summary/{user_id}")
 def summary(user_id: str):
     return get_summary(get_user_data(user_id))
@@ -101,6 +101,11 @@ def ai(user_id: str):
 @app.get("/ml/{user_id}")
 def ml(user_id: str):
     return detect_anomalies_ml(get_user_data(user_id))
+
+
+@app.get("/predict/{user_id}")
+def predict(user_id: str):
+    return predict_expense(get_user_data(user_id))
 
 
 @app.post("/add_transaction")
